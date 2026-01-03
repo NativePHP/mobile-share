@@ -1,0 +1,35 @@
+{
+    "namespace": "Share",
+
+    "bridge_functions": [
+        {
+            "name": "Share.Url",
+            "android": "com.nativephp.share.ShareFunctions.Url",
+            "ios": "ShareFunctions.Url",
+            "description": "Show native share sheet for URLs"
+        },
+        {
+            "name": "Share.File",
+            "android": "com.nativephp.share.ShareFunctions.File",
+            "ios": "ShareFunctions.File",
+            "description": "Show native share sheet for files"
+        }
+    ],
+
+    "android": {
+        "permissions": [],
+        "dependencies": {
+            "implementation": []
+        }
+    },
+
+    "ios": {
+        "info_plist": {},
+        "dependencies": {
+            "swift_packages": [],
+            "pods": []
+        }
+    },
+
+    "events": []
+}
