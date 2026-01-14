@@ -104,40 +104,6 @@ The share sheet automatically detects MIME types for common file formats:
 - Supports iPad popover presentation
 - Files are shared directly via file URLs
 
-## Examples
-
-### Share Recording After Capture
-
-```php
-use Native\Mobile\Facades\Microphone;
-use Native\Mobile\Facades\Share;
-use Native\Mobile\Events\Microphone\RecordingFinished;
-
-#[OnNative(RecordingFinished::class)]
-public function handleRecording($path, $duration)
-{
-    Share::file(
-        'Voice Note',
-        "Recording: {$duration}s",
-        $path
-    );
-}
-```
-
-### Share Photo
-
-```php
-use Native\Mobile\Facades\Camera;
-use Native\Mobile\Facades\Share;
-use Native\Mobile\Events\Camera\PhotoTaken;
-
-#[OnNative(PhotoTaken::class)]
-public function handlePhoto($path)
-{
-    Share::file('Photo', 'Check out this photo!', $path);
-}
-```
-
 ## License
 
 MIT
