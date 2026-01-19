@@ -1,6 +1,5 @@
 {
     "name": "nativephp/mobile-share",
-    "version": "0.0.4",
     "description": "Native share sheet plugin for NativePHP Mobile",
     "type": "nativephp-plugin",
     "license": "MIT",
