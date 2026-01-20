@@ -103,7 +103,3 @@ The share sheet automatically detects MIME types for common file formats:
 - Uses `UIActivityViewController`
 - Supports iPad popover presentation
 - Files are shared directly via file URLs
-
-## License
-
-MIT
