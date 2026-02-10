@@ -28,10 +28,10 @@ Share::url('Check this out!', 'Found this great article', 'https://example.com')
 #### JavaScript (Vue/React/Inertia)
 
 ```js
-import { share } from '#nativephp';
+import { Share } from '#nativephp';
 
 // Share a URL
-await share.url('Check this out!', 'Found this great article', 'https://example.com');
+await Share.url('Check this out!', 'Found this great article', 'https://example.com');
 ```
 
 ### Share a File
@@ -51,13 +51,13 @@ Share::file('Hello', 'This is my message', '');
 #### JavaScript
 
 ```js
-import { share } from '#nativephp';
+import { Share } from '#nativephp';
 
 // Share a file
-await share.file('My Recording', 'Listen to this!', '/path/to/audio.m4a');
+await Share.file('My Recording', 'Listen to this!', '/path/to/audio.m4a');
 
 // Share just text
-await share.file('Hello', 'This is my message');
+await Share.file('Hello', 'This is my message');
 ```
 
 ## Methods
