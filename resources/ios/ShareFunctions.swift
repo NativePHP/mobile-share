@@ -27,21 +27,8 @@ enum ShareFunctions {
                 return ["error": "URL parameter is required"]
             }
 
-            var shareItems: [Any] = []
-
-            if let urlObj = URL(string: url) {
-                shareItems.append(urlObj)
-            } else {
-                shareItems.append(url)
-            }
-
-            if !title.isEmpty {
-                shareItems.append(title)
-            }
-
-            if !text.isEmpty {
-                shareItems.append(text)
-            }
+            let shareText = text.isEmpty ? url : "\(text)\n\n\(url)"
+            let shareItems: [Any] = [shareText]
 
             DispatchQueue.main.async {
                 guard let windowScene = UIApplication.shared.connectedScenes
@@ -90,14 +77,15 @@ enum ShareFunctions {
             print("Share requested - title: '\(title)', message: '\(message)', filePath: '\(filePath ?? "nil")'")
 
             var shareItems: [Any] = []
+            var shouldAppendTitle = true
+            var shouldAppendMessage = true
 
             if let filePath = filePath, !filePath.isEmpty {
                 if isURL(filePath) {
-                    if let url = URL(string: filePath) {
-                        shareItems.append(url)
-                    } else {
-                        shareItems.append(filePath)
-                    }
+                    let textToShare = message.isEmpty ? filePath : "\(message)\n\n\(filePath)"
+                    shareItems.append(textToShare)
+                    shouldAppendTitle = false
+                    shouldAppendMessage = false
                 } else {
                     let fileURL = URL(fileURLWithPath: filePath)
 
@@ -108,6 +96,7 @@ enum ShareFunctions {
                         print("File not found at path: \(filePath)")
                         if !message.isEmpty {
                             shareItems.append("\(message)\n\n\(filePath)")
+                            shouldAppendMessage = false
                         } else {
                             shareItems.append(filePath)
                         }
@@ -115,11 +104,11 @@ enum ShareFunctions {
                 }
             }
 
-            if !title.isEmpty && !shareItems.contains(where: { $0 as? String == title }) {
+            if shouldAppendTitle && !title.isEmpty && !shareItems.contains(where: { $0 as? String == title }) {
                 shareItems.append(title)
             }
 
-            if !message.isEmpty && !shareItems.contains(where: { $0 as? String == message }) {
+            if shouldAppendMessage && !message.isEmpty && !shareItems.contains(where: { $0 as? String == message }) {
                 shareItems.append(message)
             }
 
