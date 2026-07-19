@@ -103,3 +103,37 @@ The share sheet automatically detects MIME types for common file formats:
 - Uses `UIActivityViewController`
 - Supports iPad popover presentation
 - Files are shared directly via file URLs
+
+## Testing
+
+The plugin extends the NativePHP testing suite with share-specific helpers, so your app tests can assert share sheet activity without knowing any bridge internals:
+
+```php
+use Native\Mobile\Testing\Native;
+
+it('shares the invite link', function () {
+    Native::test(ShareSheet::class)
+        ->tap('Share link')
+        ->assertSharedUrl('https://example.com/invite/abc');
+});
+
+it('shares the exported report', function () {
+    Native::test(ReportScreen::class)
+        ->tap('Share report')
+        ->assertSharedFile('/storage/app/report.pdf');
+});
+
+it('does not share anything before the button is tapped', function () {
+    Native::test(ReportScreen::class)
+        ->assertNothingShared();
+});
+```
+
+### Helpers
+
+- `assertShared()` — assert something was shared, a URL or a file.
+- `assertSharedUrl(?string $url = null)` — assert a URL was shared, or exactly `$url` when given.
+- `assertSharedFile(?string $filePath = null)` — assert a file was shared, or exactly `$filePath` when given.
+- `assertNothingShared()` — assert neither `Share::url()` nor `Share::file()` was called.
+
+The helpers are available on `Native::fakeBridge()` and chain directly off `Native::test(...)`. They register automatically while running tests (requires a core with a macroable FakeBridge; on older cores they simply don't register).
