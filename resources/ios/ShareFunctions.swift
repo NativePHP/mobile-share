@@ -28,7 +28,7 @@ enum ShareFunctions {
             }
 
             let shareText = text.isEmpty ? url : "\(text)\n\n\(url)"
-            let shareItems: [Any] = [shareText]
+            let shareItems: [Any] = [ShareTextItemSource(text: shareText, subject: title)]
 
             DispatchQueue.main.async {
                 guard let windowScene = UIApplication.shared.connectedScenes
@@ -83,7 +83,7 @@ enum ShareFunctions {
             if let filePath = filePath, !filePath.isEmpty {
                 if isURL(filePath) {
                     let textToShare = message.isEmpty ? filePath : "\(message)\n\n\(filePath)"
-                    shareItems.append(textToShare)
+                    shareItems.append(ShareTextItemSource(text: textToShare, subject: title))
                     shouldAppendTitle = false
                     shouldAppendMessage = false
                 } else {
@@ -94,12 +94,10 @@ enum ShareFunctions {
                         print("Added file to share items: \(fileURL.lastPathComponent)")
                     } else {
                         print("File not found at path: \(filePath)")
-                        if !message.isEmpty {
-                            shareItems.append("\(message)\n\n\(filePath)")
-                            shouldAppendMessage = false
-                        } else {
-                            shareItems.append(filePath)
-                        }
+                        let textToShare = message.isEmpty ? filePath : "\(message)\n\n\(filePath)"
+                        shareItems.append(ShareTextItemSource(text: textToShare, subject: title))
+                        shouldAppendTitle = false
+                        shouldAppendMessage = false
                     }
                 }
             }
@@ -155,5 +153,27 @@ enum ShareFunctions {
                    lowercased.hasPrefix("https://") ||
                    lowercased.hasPrefix("ftp://")
         }
+    }
+}
+
+private final class ShareTextItemSource: NSObject, UIActivityItemSource {
+    private let text: String
+    private let subject: String?
+
+    init(text: String, subject: String) {
+        self.text = text
+        self.subject = subject.isEmpty ? nil : subject
+    }
+
+    func activityViewControllerPlaceholderItem(_ activityViewController: UIActivityViewController) -> Any {
+        return text
+    }
+
+    func activityViewController(_ activityViewController: UIActivityViewController, itemForActivityType activityType: UIActivity.ActivityType?) -> Any? {
+        return text
+    }
+
+    func activityViewController(_ activityViewController: UIActivityViewController, subjectForActivityType activityType: UIActivity.ActivityType?) -> String {
+        return subject ?? ""
     }
 }
