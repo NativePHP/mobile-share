@@ -71,6 +71,80 @@ object ShareFunctions {
      *   - filePath: (optional) string - Absolute path to file to share
      */
     class File(private val context: Context) : BridgeFunction {
+
+        // Path confinement
+        //
+        // Share.File is exported in the JS bridge, so a web view page can call
+        // it through `/_native/api/call` with a `filePath` of its choosing.
+        // Handed an arbitrary readable path, the share intent will vend any
+        // file the app can read — `.env`, the SQLite database — out through the
+        // share sheet. That is a file-exfil primitive: user-gated by the sheet
+        // (the user must pick a target), but still a read-out of a named
+        // sandbox file. The non-app_storage branch below leans on FileProvider,
+        // which narrows but does not confine the path.
+        //
+        // So a shared file path is confined, not just the method gated: it must
+        // resolve inside a scratch area (the app cache) or the app's own
+        // storage (`storage_path('app')`). Secrets like `.env`, the database,
+        // `public/`, `bootstrap/cache` and `storage/framework` sit outside
+        // those roots, so a page cannot name them. The legitimate use — sharing
+        // a file the app captured into the cache or saved under `storage/app` —
+        // stays inside.
+        //
+        // Every path is canonicalised first (canonicalPath resolves symlinks
+        // and `..`) and only then prefix-checked, so neither `..` nor a symlink
+        // can walk out of a root. URLs (http/https/ftp) are not file paths and
+        // are not confined.
+        //
+        // These helpers live inside File (not on the object) so the unqualified
+        // `File(...)` constructor keeps resolving to java.io.File, as it does
+        // across the rest of this class. The classifier name `File` on its own,
+        // though, binds to this enclosing class, so the one static-member access
+        // (`separator`) is spelled out as java.io.File.
+
+        /** A path with symlinks and `..`/`.` resolved; the literal path on failure. */
+        private fun canonical(path: String): String =
+            try { File(path).canonicalPath } catch (e: Exception) { File(path).absolutePath }
+
+        /** True when [path] is [root] itself or sits beneath it; both canonical. */
+        private fun isInside(path: String, root: String): Boolean =
+            path == root || path.startsWith(root + java.io.File.separator)
+
+        /**
+         * The app's own storage area — where `storage_path('app')` resolves.
+         *
+         * `storage_path()` is NOT under the Laravel app tree. `LaravelEnvironment`
+         * points Laravel at `getDir("storage")/persisted_data/storage` via
+         * `LARAVEL_STORAGE_PATH`, deliberately outside `…/laravel` so it
+         * survives an OTA that swaps the extract. This mirrors that exact path,
+         * so a legitimate `storage_path('app')` file is accepted.
+         */
+        private fun storageAppRoot(): String =
+            canonical(File(context.getDir("storage", Context.MODE_PRIVATE), "persisted_data/storage/app").path)
+
+        /** The roots a shared file may come from: the cache areas plus storage. */
+        private fun shareableRoots(): List<String> {
+            val roots = mutableListOf(canonical(context.cacheDir.path))
+            context.externalCacheDir?.let { roots.add(canonical(it.path)) }
+            roots.add(storageAppRoot())
+            return roots
+        }
+
+        /**
+         * Refuse a share whose file path falls outside the allowed roots.
+         * Returns an error payload to hand straight back, or null to proceed.
+         */
+        private fun confinementError(path: String): Map<String, Any>? {
+            val real = canonical(path)
+
+            if (shareableRoots().none { isInside(real, it) }) {
+                Log.w("ShareFunctions.File", "Share refused: file outside the allowed roots")
+                return mapOf("error" to "File path is not allowed")
+            }
+
+            return null
+        }
+
         override fun execute(parameters: Map<String, Any>): Map<String, Any> {
             val title = parameters["title"] as? String ?: ""
             val message = parameters["message"] as? String ?: ""
@@ -80,6 +154,10 @@ object ShareFunctions {
 
             try {
                 cleanupOldShareFiles(context)
+
+                if (!filePath.isNullOrEmpty() && !isUrl(filePath)) {
+                    confinementError(filePath)?.let { return it }
+                }
 
                 val intent = Intent(Intent.ACTION_SEND).apply {
                     if (!filePath.isNullOrEmpty()) {
