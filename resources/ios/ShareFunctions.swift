@@ -7,6 +7,89 @@ import UIKit
 /// Namespace: "Share.*"
 enum ShareFunctions {
 
+    // MARK: - Path confinement
+    //
+    // Share.File is exported in the JS bridge, so a web view page can call it
+    // through `/_native/api/call` with a `filePath` of its choosing. Handed an
+    // arbitrary readable path, `UIActivityViewController` will vend any file
+    // the app can read — `.env`, the SQLite database — out through the share
+    // sheet. That is a file-exfil primitive: user-gated by the sheet (the user
+    // must pick a target), but still a read-out of a named sandbox file.
+    //
+    // So a shared file path is confined, not just the method gated: it must
+    // resolve inside a scratch area (temp or caches) or the app's own storage
+    // (`storage_path('app')`). Secrets like `.env`, the database, `public/`,
+    // `bootstrap/cache` and `storage/framework` sit outside those roots, so a
+    // page cannot name them. The legitimate use — sharing a file the app
+    // captured into temp/caches or saved under `storage/app` — stays inside.
+    //
+    // The path is canonicalised first (symlinks and `..` resolved) and only
+    // then prefix-checked, so neither `..` nor a symlink can walk out of a
+    // root. URLs (http/https/ftp) are not file paths and are not confined.
+
+    /// A path with every symlink and `..`/`.` resolved. A non-existent path is
+    /// resolved through its existing parent, so the check still sees where it
+    /// would land.
+    private static func canonical(_ path: String) -> String {
+        let fileManager = FileManager.default
+        let url = URL(fileURLWithPath: path)
+
+        if fileManager.fileExists(atPath: url.path) {
+            return url.resolvingSymlinksInPath().standardizedFileURL.path
+        }
+
+        let parent = url.deletingLastPathComponent().resolvingSymlinksInPath().standardizedFileURL
+        return parent.appendingPathComponent(url.lastPathComponent).standardizedFileURL.path
+    }
+
+    /// True when `path` is `root` itself or sits beneath it. Both must already
+    /// be canonical, so a prefix match is a real containment.
+    private static func isInside(_ path: String, _ root: String) -> Bool {
+        !root.isEmpty && (path == root || path.hasPrefix(root + "/"))
+    }
+
+    /// The app's own storage area — where `storage_path('app')` resolves.
+    ///
+    /// On iOS `storage_path()` is NOT under the extracted app. Core points
+    /// Laravel at Application Support via `LARAVEL_STORAGE_PATH` (set in
+    /// `NativePHPApp.setupEnvironment`), which the framework reads in
+    /// `Application::storagePath()`. Derive the root from that same env so a
+    /// legitimate `storage_path('app')` file is accepted; if it is somehow
+    /// unset, return "" so the root is simply dropped (fail closed — temp and
+    /// caches still work, storage sharing is refused rather than wide open).
+    private static var storageAppRoot: String {
+        if let raw = getenv("LARAVEL_STORAGE_PATH") {
+            let storage = String(cString: raw)
+            if !storage.isEmpty {
+                return canonical(storage + "/app")
+            }
+        }
+
+        return ""
+    }
+
+    /// The roots a shared file may come from: the scratch areas plus storage.
+    private static var shareableRoots: [String] {
+        var roots = [canonical(NSTemporaryDirectory()), storageAppRoot]
+        if let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            roots.append(canonical(caches.path))
+        }
+        return roots.filter { !$0.isEmpty }
+    }
+
+    /// Refuse a share whose file path falls outside the allowed roots. Returns
+    /// an error payload to hand straight back, or nil to proceed.
+    private static func confinementError(path: String) -> [String: Any]? {
+        let real = canonical(path)
+
+        guard shareableRoots.contains(where: { isInside(real, $0) }) else {
+            print("Share refused: file outside the allowed roots")
+            return ["error": "File path is not allowed"]
+        }
+
+        return nil
+    }
+
     // MARK: - Share.Url
 
     /// Show the native share sheet for URLs
@@ -99,6 +182,10 @@ enum ShareFunctions {
                         shareItems.append(filePath)
                     }
                 } else {
+                    if let refusal = ShareFunctions.confinementError(path: filePath) {
+                        return refusal
+                    }
+
                     let fileURL = URL(fileURLWithPath: filePath)
 
                     if FileManager.default.fileExists(atPath: fileURL.path) {
